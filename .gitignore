@@ -149,7 +149,7 @@ venv.bak/
 dmypy.json
 
 # Pyre type checker
-.pyre/
+.pyre/git push --set-upstream origin master
 
 # pytype static type analyzer
 .pytype/
@@ -185,3 +185,6 @@ pyrightconfig.json
 [Ss]cripts
 pyvenv.cfg
 pip-selfcheck.json
+
+
+.vscode/
