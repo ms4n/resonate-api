@@ -19,7 +19,7 @@ driver = webdriver.Chrome(service=service, options=chrome_options)
 
 # URL of the webpage to scrape
 nutritonal_data_url = os.environ.get('NUTRITONAL_DATA_URL')
-food_slug = "brocolli"
+food_slug = "paneer"
 url = f"{nutritonal_data_url}{food_slug}"  # Replace with the actual URL
 
 # Load the webpage
