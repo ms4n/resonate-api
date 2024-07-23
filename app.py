@@ -96,7 +96,8 @@ def save_vector_and_meta(db_cursor, doc, embedding):
 
         query = f"""
             INSERT INTO {PGVECTOR_COLLECTION_NAME} (id, food, embedding, metadata)
-            VALUES ('{vector_id}', '{doc["food"]}', '{embedding}', '{json_doc}')
+            VALUES ('{vector_id}', '{doc["food"]}',
+                    '{embedding}', '{json_doc}')
             ON CONFLICT (id)
             DO
                 UPDATE SET food = '{doc["food"]}', embedding = '{embedding}', metadata = '{json_doc}'
@@ -110,10 +111,58 @@ def save_vector_and_meta(db_cursor, doc, embedding):
         print(
             f"[save_vector_and_meta] exception of type {type(e).__name__}: {e}")
 
+# Create and save embeddings for all the records in nutritional data
+# for doc in nutrition_data_json:
+#     embedding = get_embeddings_vector(doc.get("food"))
+#     save_vector_and_meta(db_cursor, doc, embedding)
 
-for doc in nutrition_data_json:
-    embedding = get_embeddings_vector(doc.get("food"))
-    save_vector_and_meta(db_cursor, doc, embedding)
+
+def get_top_relevant_food_macro_data(db_cursor, food, embeddings, k=5):
+    try:
+        query = f"""
+            WITH vector_matches AS (
+                SELECT id, food, metadata, embedding <=> '{embeddings}' AS distance
+                FROM {PGVECTOR_COLLECTION_NAME}
+            )
+            SELECT id, food, metadata, distance
+            FROM vector_matches
+            ORDER BY distance
+            LIMIT '{k}';
+        """
+
+        db_cursor.execute(query)
+        all_matches = db_cursor.fetchall()
+
+        relevant_matches = []
+
+        print("All matches:")
+        for doc in all_matches:
+            print(f'-- {round(doc[3], 2)}: {doc[1]} / {doc[2]}')
+
+            # The lower the score value, the more similar vectors are
+            if round(doc[3], 2) <= 0.1:
+                relevant_matches.append({
+                    "document": doc,
+                    "score": doc[3]
+                })
+
+        if len(relevant_matches) == 0:
+            # TODO: Scrape for food macro data, if no data found, add it to db with embeds
+            print("No relevant matches found")
+        else:
+            print("Relevant matches: ")
+            [print(f'-- {round(doc["score"], 2)}: {doc["document"][1]} / {doc["document"][2]}')
+             for doc in relevant_matches]
+        return relevant_matches
+    except Exception as e:
+        print(f"[get_top_relevant_messages] {type(e).__name__} exception: {e}")
+        return []
+
+
+food_1 = "Chicken"
+
+get_top_relevant_food_macro_data(
+    db_cursor, food_1, get_embeddings_vector(food_1.lower()))
 
 
 db_cursor.close()
