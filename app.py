@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import psycopg2
 import pgvector
@@ -21,7 +22,7 @@ open_ai_client = OpenAI()
 # print(response.data[0].embedding)
 
 
-# Connect to Postgresql DB and install the pgvector extension
+# Connect to Supabase Postgresql DB
 db_connection = psycopg2.connect(user="postgres.axorhmgpwzqruniwisvr",
                                  password=os.getenv("POSTGRES_PASSWORD"),
                                  host="aws-0-ap-south-1.pooler.supabase.com",
@@ -49,6 +50,7 @@ nutrition_data = db_cursor.fetchall()
 
 column_list = [column[0] for column in db_cursor.description]
 
+# Convert nutriton data as list of dictionary
 nutrition_data_json = [{column_list[i]: data[i]
                         for i in range(len(column_list))} for data in nutrition_data]
 
@@ -59,3 +61,28 @@ db_connection.close()
 test_input = nutrition_data_json[0]
 
 
+def get_embeddings_vector(input_vector_string):
+    response = open_ai_client.embeddings.create(
+        input=input_vector_string,
+        model="text-embedding-3-small"
+    )
+
+    print(
+        f'Generated embeddings for the string "{input_vector_string[0:20]}", dimensions: {len(response.data[0].embedding)}')
+
+    return response.data[0].embedding
+
+
+def get_vector_id(nutrition_info):
+    food_name = nutrition_info.get('food', '')
+
+    # Use the current timestamp as a unique identifier
+    timestamp = int(time.time())
+
+    vector_id = f'{food_name}-{timestamp}'
+
+    print(f'vector_id = {vector_id}')
+    return vector_id
+
+
+get_vector_id(test_input)
