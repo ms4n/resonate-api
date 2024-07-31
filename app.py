@@ -39,8 +39,10 @@ db_connection.autocommit = True
 
 query = """
     SELECT
-        food,
+        food_name,
         single_serving_size::FLOAT AS single_serving_size,
+        quantity::FLOAT AS quantity,
+        quantity_unit,
         calories::FLOAT AS calories,
         total_fat::FLOAT AS total_fat,
         total_carbohydrates::FLOAT AS total_carbohydrates,
@@ -60,6 +62,8 @@ nutrition_data_json = [{column_list[i]: data[i]
 
 
 def get_embeddings_vector(input_vector_string):
+    input_vector_string = input_vector_string.lower()
+
     response = open_ai_client.embeddings.create(
         input=input_vector_string,
         model="text-embedding-3-small"
@@ -72,7 +76,7 @@ def get_embeddings_vector(input_vector_string):
 
 
 def get_vector_id(meta):
-    food_name = meta.get('food', '')
+    food_name = meta.get('food_name', '')
 
     # Convert meta dictionary to a JSON string, excluding the 'food' field
     meta_dict = {k: v for k, v in meta.items() if k != 'food'}
@@ -83,7 +87,7 @@ def get_vector_id(meta):
 
     # Combine food name with the hash to create the vector ID
     # Use the first 8 characters of the hash for brevity
-    vector_id = f'{food_name}-{meta_hash[:8]}'
+    vector_id = f'{food_name.lower()}-{meta_hash[:8]}'
 
     print(f'vector_id = {vector_id}')
     return vector_id
@@ -95,12 +99,12 @@ def save_vector_and_meta(db_cursor, doc, embedding):
         json_doc = json.dumps(doc)
 
         query = f"""
-            INSERT INTO {PGVECTOR_COLLECTION_NAME} (id, food, embedding, metadata)
-            VALUES ('{vector_id}', '{doc["food"]}',
+            INSERT INTO {PGVECTOR_COLLECTION_NAME} (id, food_name, embedding, metadata)
+            VALUES ('{vector_id}', '{doc["food_name"]}',
                     '{embedding}', '{json_doc}')
             ON CONFLICT (id)
             DO
-                UPDATE SET food = '{doc["food"]}', embedding = '{embedding}', metadata = '{json_doc}'
+                UPDATE SET food_name = '{doc["food_name"]}', embedding = '{embedding}', metadata = '{json_doc}'
     """
 
         db_cursor.execute(query)
@@ -111,20 +115,21 @@ def save_vector_and_meta(db_cursor, doc, embedding):
         print(
             f"[save_vector_and_meta] exception of type {type(e).__name__}: {e}")
 
+
 # Create and save embeddings for all the records in nutritional data
 # for doc in nutrition_data_json:
-#     embedding = get_embeddings_vector(doc.get("food"))
+#     embedding = get_embeddings_vector(doc.get("food_name"))
 #     save_vector_and_meta(db_cursor, doc, embedding)
 
 
-def get_top_relevant_food_macro_data(db_cursor, food, embeddings, k=3):
+def get_top_relevant_food_macro_data(db_cursor, food_name, embeddings, k=3):
     try:
         query = f"""
             WITH vector_matches AS (
-                SELECT id, food, metadata, embedding <=> '{embeddings}' AS distance
+                SELECT id, food_name, metadata, embedding <=> '{embeddings}' AS distance
                 FROM {PGVECTOR_COLLECTION_NAME}
             )
-            SELECT id, food, metadata, distance
+            SELECT id, food_name, metadata, distance
             FROM vector_matches
             ORDER BY distance
             LIMIT '{k}';
@@ -169,16 +174,16 @@ def parse_food_input_llm(user_input):
     prompt = f"""
     Parse the following meal description into a list of food items and their quantities.
     Return the result as a JSON array of objects, where each object has 'food', 'quantity', and 'unit' keys.
-    
+
     User's meal description: {user_input}
-    
+
     Example output format:
     [
         {{"food": "chicken breast", "quantity": 200, "unit": "g"}},
         {{"food": "brown rice", "quantity": 1, "unit": "cup"}},
         {{"food": "broccoli", "quantity": 100, "unit": "g"}}
     ]
-    
+
     Output a valid json without any markdown.
     """
 
@@ -200,13 +205,13 @@ def parse_food_input_llm(user_input):
 
 
 # Example usage
-user_input = "I had 200 gm of chicken breast with a cup of cooked rice"
+user_input = "I had 200 gm of chicken with a cup of rice"
 parsed_meal = parse_food_input_llm(user_input)
 print(json.dumps(parsed_meal, indent=2))
 
 for item in parsed_meal:
     get_top_relevant_food_macro_data(
-        db_cursor, item["food"], get_embeddings_vector(item["food"]))
+        db_cursor, item["food"], get_embeddings_vector(item["food"].lower()))
 
 
 db_cursor.close()
