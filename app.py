@@ -39,6 +39,7 @@ db_connection.autocommit = True
 
 query = """
     SELECT
+        food_id,
         food_name,
         single_serving_size::FLOAT AS single_serving_size,
         quantity::FLOAT AS quantity,
@@ -69,32 +70,27 @@ def get_embeddings_vector(input_vector_string):
         model="text-embedding-3-small"
     )
 
-    # print(f'Generated embeddings for the string "{input_vector_string}", dimensions: {len(response.data[0].embedding)}')
-
     return response.data[0].embedding
 
 
-def get_vector_id(meta):
-    food_name = meta.get('food_name', '')
-
-    # Convert meta dictionary to a JSON string, excluding the 'food' field
-    meta_dict = {k: v for k, v in meta.items() if k != 'food'}
-    meta_str = json.dumps(meta_dict, sort_keys=True)
-
-    # Generate a hash of the JSON string
-    meta_hash = hashlib.sha256(meta_str.encode()).hexdigest()
-
-    # Combine food name with the hash to create the vector ID
-    # Use the first 8 characters of the hash for brevity
-    vector_id = f'{food_name.lower()}-{meta_hash[:8]}'
-
-    print(f'vector_id = {vector_id}')
-    return vector_id
-
-
-def save_vector_and_meta(db_cursor, doc, embedding):
+def create_embed_and_save(doc):
     try:
-        vector_id = get_vector_id(doc)
+        food_name = doc.get("food_name")
+        embedding = get_embeddings_vector(food_name)
+
+        food_id = doc.get("food_id")
+
+        # Convert meta dictionary to a JSON string, excluding the 'food_id' field
+        meta_dict = {k: v for k, v in doc.items() if k != 'food_id'}
+        meta_str = json.dumps(meta_dict, sort_keys=True)
+
+        # Generate a hash of the JSON string
+        meta_hash = hashlib.sha256(meta_str.encode()).hexdigest()
+
+        # Combine food_id with the hash to create the vector ID
+        # Use the first 8 characters of the hash for brevity
+        vector_id = f'{food_id.lower()}-{meta_hash[:8]}'
+
         json_doc = json.dumps(doc)
 
         query = f"""
@@ -104,21 +100,18 @@ def save_vector_and_meta(db_cursor, doc, embedding):
             ON CONFLICT (id)
             DO
                 UPDATE SET food_name = '{doc["food_name"]}', embedding = '{embedding}', metadata = '{json_doc}'
-    """
+        """
 
         db_cursor.execute(query)
         print(f"Vector {vector_id} was added to the DB")
 
-        return vector_id
     except Exception as e:
         print(
-            f"[save_vector_and_meta] exception of type {type(e).__name__}: {e}")
+            f"[create_embed_and_save] exception of type {type(e).__name__}: {e}")
 
 
-# Create and save embeddings for all the records in nutritional data
 # for doc in nutrition_data_json:
-#     embedding = get_embeddings_vector(doc.get("food_name"))
-#     save_vector_and_meta(db_cursor, doc, embedding)
+#     create_embed_and_save(doc)
 
 
 def get_top_relevant_food_macro_data(db_cursor, food_name, embeddings, k=1):
