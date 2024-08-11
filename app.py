@@ -182,9 +182,22 @@ def parse_food_input_llm(user_input):
 
 
 # Example usage
-user_input = "i ate boiled rice with 200g chicken fillet"
-parsed_meal = parse_food_input_llm(user_input)
+# user_input = "i ate boiled rice with 200g chicken fillet"
+# parsed_meal = parse_food_input_llm(user_input)
 
+
+parsed_meal = [
+    {
+        "food": "chicken fillet",
+        "quantity": 200,
+        "unit": "g"
+    },
+    {
+        "food": "boiled rice",
+        "quantity": 1,
+        "unit": "cup"
+    }
+]
 
 print(json.dumps(parsed_meal, indent=2))
 
